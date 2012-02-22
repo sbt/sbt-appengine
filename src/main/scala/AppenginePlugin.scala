@@ -18,7 +18,10 @@ object Plugin extends sbt.Plugin {
     lazy val deployQueues   = InputKey[Unit]("appengine-deploy-queues", "Update application task queue definitions.")
     lazy val deployDos      = InputKey[Unit]("appengine-deploy-dos", "Update application DoS protection configuration.")
     lazy val cronInfo       = InputKey[Unit]("appengine-cron-info", "Displays times for the next several runs of each cron job.")
+    lazy val devserver      = InputKey[Unit]("appengine-devserver", "Runs web app through development server with optional args")
     
+    lazy val apiToolsJar    = SettingKey[String]("appengine-api-tools-jar", "Name of the development startup executable jar.")
+    lazy val apiToolsPath   = SettingKey[File]("appengine-api-tools-path", "Path of the development startup executable jar.")
     lazy val sdkVersion     = SettingKey[String]("appengine-sdk-version")
     lazy val sdkPath        = SettingKey[File]("appengine-sdk-path")
     lazy val classpath      = SettingKey[Classpath]("appengine-classpath")
@@ -76,6 +79,24 @@ object Plugin extends sbt.Plugin {
   private def isWindows = System.getProperty("os.name").startsWith("Windows")
   private def osBatchSuffix = if (isWindows) ".cmd" else ".sh"
 
+  private def launchDevServer(args: TaskKey[Seq[String]]) =
+    (args, gae.temporaryWarPath, gae.apiToolsPath, packageWar, streams) map { (args, w, toolsPath, depends, s) =>
+      val devServer = Seq("java", "-cp", toolsPath.absolutePath,
+        "com.google.appengine.tools.KickStart",
+        "com.google.appengine.tools.development.DevAppServerMain"
+      )
+
+      val launch: Seq[String] = devServer ++ args ++ Seq(w.absolutePath)
+
+      s.log.info("Press [Enter] to kill appengine dev server...")
+
+      val process = launch.run()
+      scala.Console.readLine()
+      process.destroy()
+
+      ()
+    }
+
   lazy val baseAppengineSettings: Seq[Project.Setting[_]] = Seq(
     // webappUnmanaged  <<= (gae.temporaryWarPath) { (dir) => dir / "WEB-INF" / "appengine-generated" *** },
     unmanagedClasspath  <++= (gae.classpath) map { (cp) => cp },
@@ -88,7 +109,9 @@ object Plugin extends sbt.Plugin {
     gae.deployQueues <<= inputTask { (args: TaskKey[Seq[String]])  => appcfgTask("update_queues", None, args, packageWar) },
     gae.deployDos <<= inputTask { (args: TaskKey[Seq[String]])     => appcfgTask("update_dos", None, args, packageWar) },
     gae.cronInfo <<= inputTask { (args: TaskKey[Seq[String]])      => appcfgTask("cron_info", None, args) },
+    gae.devserver <<= inputTask { (args: TaskKey[Seq[String]])     => launchDevServer(args) },
 
+    gae.apiToolsJar := "appengine-tools-api.jar",
     gae.sdkVersion <<= (gae.libUserPath) { (dir) => buildSdkVersion(dir) },
     gae.sdkPath := buildAppengineSdkPath,
     gae.classpath <<= (gae.apiJarPath) { (jar: File) => Attributed.blankSeq(Seq(jar)) },
@@ -101,6 +124,7 @@ object Plugin extends sbt.Plugin {
     gae.libUserPath <<= gae.libPath(_ / "user"),
     gae.libImplPath <<= gae.libPath(_ / "impl"),
     gae.apiJarPath <<= (gae.libUserPath, gae.apiJarName) { (dir, name) => dir / name },
+    gae.apiToolsPath <<= (gae.libPath, gae.apiToolsJar) { _ / _ },
     gae.appcfgName := "appcfg" + osBatchSuffix,
     gae.appcfgPath <<= (gae.binPath, gae.appcfgName) { (dir, name) => dir / name },
     gae.emptyFile := file(""),
