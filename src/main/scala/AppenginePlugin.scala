@@ -8,8 +8,11 @@ object Plugin extends sbt.Plugin {
   import Project.Initialize
   import com.github.siasia.PluginKeys._
   import com.github.siasia.WebPlugin
+  import cc.spray.revolver
+  import revolver.Actions._
+  import revolver.Utilities._
   
-  object AppengineKeys {
+  object AppengineKeys extends revolver.RevolverKeys {
     lazy val requestLogs    = InputKey[Unit]("appengine-request-logs", "Write request logs in Apache common log format.")
     lazy val rollback       = InputKey[Unit]("appengine-rollback", "Rollback an in-progress update.")
     lazy val deploy         = InputKey[Unit]("appengine-deploy", "Create or update an app version.")
@@ -18,8 +21,9 @@ object Plugin extends sbt.Plugin {
     lazy val deployQueues   = InputKey[Unit]("appengine-deploy-queues", "Update application task queue definitions.")
     lazy val deployDos      = InputKey[Unit]("appengine-deploy-dos", "Update application DoS protection configuration.")
     lazy val cronInfo       = InputKey[Unit]("appengine-cron-info", "Displays times for the next several runs of each cron job.")
-    lazy val devserver      = InputKey[Unit]("appengine-devserver", "Runs web app through development server with optional args")
-    
+    lazy val devServer      = InputKey[revolver.AppProcess]("appengine-dev-server", "Run application through development server.")
+    lazy val stopDevServer  = TaskKey[Unit]("appengine-stop-dev-server", "Stop development server.")
+
     lazy val apiToolsJar    = SettingKey[String]("appengine-api-tools-jar", "Name of the development startup executable jar.")
     lazy val apiToolsPath   = SettingKey[File]("appengine-api-tools-path", "Path of the development startup executable jar.")
     lazy val sdkVersion     = SettingKey[String]("appengine-sdk-version")
@@ -35,8 +39,11 @@ object Plugin extends sbt.Plugin {
     lazy val apiJarPath     = SettingKey[File]("appengine-api-jar-path")
     lazy val appcfgName     = SettingKey[String]("appengine-appcfg-name")
     lazy val appcfgPath     = SettingKey[File]("appengine-appcfg-path")
+    lazy val overridePath   = SettingKey[File]("appengine-override-path")
+    lazy val overridesJarPath = SettingKey[File]("appengine-overrides-jar-path")
+    lazy val agentJarPath   = SettingKey[File]("appengine-agent-jar-path")
     lazy val emptyFile      = TaskKey[File]("appengine-empty-file")
-    lazy val temporaryWarPath = SettingKey[File]("appengine-temporary-war-path")    
+    lazy val temporaryWarPath = SettingKey[File]("appengine-temporary-war-path")
   }
   private val gae = AppengineKeys
   
@@ -78,23 +85,24 @@ object Plugin extends sbt.Plugin {
   private def isWindows = System.getProperty("os.name").startsWith("Windows")
   private def osBatchSuffix = if (isWindows) ".cmd" else ".sh"
 
-  private def launchDevServer(args: TaskKey[Seq[String]]) =
-    (args, gae.temporaryWarPath, gae.apiToolsPath, packageWar, streams) map { (args, w, toolsPath, depends, s) =>
-      val devServer = Seq("java", "-cp", toolsPath.absolutePath,
-        "com.google.appengine.tools.KickStart",
-        "com.google.appengine.tools.development.DevAppServerMain"
-      )
-
-      val launch: Seq[String] = devServer ++ args ++ Seq(w.absolutePath)
-
-      s.log.info("Press [Enter] to kill appengine dev server...")
-
-      val process = launch.run()
-      scala.Console.readLine()
-      process.destroy()
-
-      ()
+  private def restartDevServer(streams: TaskStreams, state: State, fkops: ForkScalaRun, mainClass: Option[String], cp: Classpath,
+    args: Seq[String], startConfig: ExtraCmdLineOptions, war: File): revolver.AppProcess = {
+    stopAppWithStreams(streams, state)
+    startDevServer(streams, unregisterAppProcess(state, ()), fkops, mainClass, cp, args, startConfig)
+  }
+  private def startDevServer(streams: TaskStreams, state: State, fkops: ForkScalaRun, mainClass: Option[String], cp: Classpath,
+      args: Seq[String], startConfig: ExtraCmdLineOptions): revolver.AppProcess = {
+    assert(!state.has(appProcessKey))
+    colorLogger(streams.log).info("[YELLOW]Starting application in the background ...")
+    revolver.AppProcess {
+      Fork.java.fork(fkops.javaHome,
+        Seq("-cp", cp.map(_.data.absolutePath).mkString(System.getProperty("file.separator"))) ++
+        fkops.runJVMOptions ++ startConfig.jvmArgs ++ 
+        Seq(mainClass.get) ++
+        startConfig.startArgs ++ args,
+        fkops.workingDirectory, Map(), false, StdoutOutput)
     }
+  }    
 
   lazy val baseAppengineSettings: Seq[Project.Setting[_]] = Seq(
     // webappUnmanaged  <<= (gae.temporaryWarPath) { (dir) => dir / "WEB-INF" / "appengine-generated" *** },
@@ -108,12 +116,34 @@ object Plugin extends sbt.Plugin {
     gae.deployQueues <<= inputTask { (args: TaskKey[Seq[String]])  => appcfgTask("update_queues", None, args, packageWar) },
     gae.deployDos <<= inputTask { (args: TaskKey[Seq[String]])     => appcfgTask("update_dos", None, args, packageWar) },
     gae.cronInfo <<= inputTask { (args: TaskKey[Seq[String]])      => appcfgTask("cron_info", None, args) },
-    gae.devserver <<= inputTask { (args: TaskKey[Seq[String]])     => launchDevServer(args) },
+    
+    gae.devServer <<= InputTask(startArgsParser) { args =>
+      (streams, state, gae.reForkOptions in gae.devServer, mainClass in gae.devServer, fullClasspath in gae.devServer,
+        gae.reStartArgs in gae.devServer, args, packageWar)
+        .map(restartDevServer)
+        .updateState(registerAppProcess)
+        .dependsOn(products in Compile) },
+    gae.reForkOptions in gae.devServer <<= (gae.temporaryWarPath,
+        javaOptions in gae.devServer, outputStrategy, javaHome) map { (wp, jvmOptions, strategy, javaHomeDir) => ForkOptions(
+        scalaJars = Nil,
+        javaHome = javaHomeDir,
+        connectInput = false,
+        outputStrategy = strategy,
+        runJVMOptions = jvmOptions,
+        workingDirectory = Some(wp)
+      )
+    },
+    mainClass in gae.devServer := Some("com.google.appengine.tools.development.DevAppServerMain"),
+    fullClasspath in gae.devServer <<= (gae.apiToolsPath) map { (jar: File) => Seq(jar).classpath },
+    gae.reStartArgs in gae.devServer <<= gae.temporaryWarPath { (wp) => Seq(wp.absolutePath) },
+    javaOptions in gae.devServer <<= (gae.overridesJarPath, gae.agentJarPath ) { (o, a) =>
+      Seq("-ea" , "-javaagent:" + a.getAbsolutePath, "-Xbootclasspath/p:" + o.getAbsolutePath) },
+    gae.stopDevServer <<= gae.reStop map {identity},
 
     gae.apiToolsJar := "appengine-tools-api.jar",
     gae.sdkVersion <<= (gae.libUserPath) { (dir) => buildSdkVersion(dir) },
     gae.sdkPath := buildAppengineSdkPath,
-    gae.classpath <<= (gae.apiJarPath) { (jar: File) => Attributed.blankSeq(Seq(jar)) },
+    gae.classpath <<= (gae.apiJarPath) { (jar: File) => Seq(jar).classpath },
     gae.apiJarName <<= (gae.sdkVersion) { (v) => "appengine-api-1.0-sdk-" + v + ".jar" },
     gae.apiLabsJarName <<= (gae.sdkVersion) { (v) => "appengine-api-labs-" + v + ".jar" },
     gae.jsr107CacheJarName <<= (gae.sdkVersion) { (v) => "appengine-jsr107cache-" + v + ".jar" },
@@ -126,13 +156,16 @@ object Plugin extends sbt.Plugin {
     gae.apiToolsPath <<= (gae.libPath, gae.apiToolsJar) { _ / _ },
     gae.appcfgName := "appcfg" + osBatchSuffix,
     gae.appcfgPath <<= (gae.binPath, gae.appcfgName) { (dir, name) => dir / name },
+    gae.overridePath <<= gae.libPath(_ / "override"),
+    gae.overridesJarPath <<= (gae.overridePath) { (dir) => dir / "appengine-dev-jdk-overrides.jar" },
+    gae.agentJarPath <<= (gae.libPath) { (dir) => dir / "agent" / "appengine-agent.jar" },
     gae.emptyFile := file(""),
     gae.temporaryWarPath <<= target / "webapp"  
   )
 
   lazy val webSettings = appengineSettings
   lazy val appengineSettings: Seq[Project.Setting[_]] = WebPlugin.webSettings ++
-    inConfig(Compile)(baseAppengineSettings) ++
+    inConfig(Compile)(revolver.RevolverPlugin.Revolver.settings ++ baseAppengineSettings) ++
     inConfig(Test)(Seq(
       unmanagedClasspath <++= (gae.classpath) map { (cp) => cp },
       gae.classpath <<= (gae.classpath in Compile,
@@ -142,71 +175,6 @@ object Plugin extends sbt.Plugin {
         cp ++ Attributed.blankSeq(impljars ++ testingjars)
       }
     ))
-
-  /*
-  def appengineToolsJarPath = (appengineLibPath / "appengine-tools-api.jar")
-  */
-  /* Overrides jar present as of sdk 1.4.3 */
-  /*
-  def appengineOverridePath = appengineSdkPath / "lib" / "override"
-  def overridesJarName = "appengine-dev-jdk-overrides.jar"
-  def appengineOverridesJarPath = appengineOverridePath / overridesJarName
-
-  lazy val javaCmd = (Path.fromFile(new java.io.File(System.getProperty("java.home"))) / "bin" / "java").absolutePath
-
-  def appengineAgentPath = appengineLibPath / "agent" / "appengine-agent.jar"
-
-  def devAppserverJvmOptions:Seq[String] = List()
-  lazy val devAppserverInstance = new DevAppserverRun
-  lazy val devAppserverStart = devAppserverStartAction
-  lazy val devAppserverStop = devAppserverStopAction
-  def devAppserverStartAction = task{ args => devAppserverStartTask(args) dependsOn(prepareWebapp) }
-  def devAppserverStopAction = devAppserverStopTask
-  def devAppserverStartTask(args: Seq[String]) = task {devAppserverInstance(args)}
-  def devAppserverStopTask = task {
-    devAppserverInstance.stop()
-    None
-  }
-
-  class DevAppserverRun extends Runnable with ExitHook {
-    ExitHooks.register(this)
-    def name = "dev_appserver-shutdown"
-    def runBeforeExiting() { stop() }
-
-    val jvmOptions =
-      List("-ea", "-javaagent:"+appengineAgentPath.absolutePath,
-           "-cp", appengineToolsJarPath.absolutePath,
-           "-Xbootclasspath/p:"+appengineOverridesJarPath) ++ devAppserverJvmOptions
-
-    private var running: Option[Process] = None
-
-    def run() {
-      running.foreach(_.exitValue())
-      running = None
-    }
-
-    def apply(args: Seq[String]): Option[String] = {
-      if (running.isDefined)
-        Some("An instance of dev_appserver is already running.")
-      else {
-        val builder: ProcessBuilder =
-          Process(javaCmd :: jvmOptions :::
-                  "com.google.appengine.tools.development.DevAppServerMain" ::
-                  args.toList ::: temporaryWarPath.absolutePath :: Nil,
-                  Some(temporaryWarPath.asFile))
-        running = Some(builder.run())
-        new Thread(this).start()
-        None
-      }
-    }
-
-    def stop() {
-      running.foreach(_.destroy)
-      running = None
-      log.debug("stop")
-    }
-  }
-  */
 }
 
 /*

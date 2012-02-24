@@ -10,6 +10,8 @@ export environment variables (actually, JRebel support is not ported yet).
 put the following in the `project/plugins.sbt`:
 
 ```scala
+resolvers += "spray repo" at "http://repo.spray.cc"
+
 addSbtPlugin("com.eed3si9n" % "sbt-appengine" % "0.3.1")
 ```
 
@@ -36,6 +38,14 @@ lazy val example = Project("web", file("web"),
 you can now deploy your application like this:
 
     > appengine-deploy
+
+to start the development server:
+
+    > appengine-dev-server
+
+to redeploy development server continuously:
+
+    > ~ appengine-dev-server
 
 sample
 ======
