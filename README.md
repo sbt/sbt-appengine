@@ -65,7 +65,25 @@ sample
 
 - [simple sample][3]
 
+known issues and workarounds
+======
+
+When trying to launch the dev server with `appengine-dev-server`, you might run
+into the following exception: `java.lang.RuntimeException: Unable to restore the previous TimeZone`.
+
+This bug was introduced in a java 6 update.
+
+The workaround is simple, fortunately. In your build settings where you include
+the appengine settings, you must pass in the following jvm args to the dev
+server launch `-Dappengine.user.timezone=UTC`.
+
+```
+javaOptions in (Compile, gae.devServer) += "-Dappengine.user.timezone=UTC"
+```
+
+[appengine disscussion about the issue][4]
+
   [1]: https://github.com/Yasushi/sbt-appengine-plugin
   [2]: https://github.com/Yasushi
   [3]: https://github.com/sbt/sbt-appengine/tree/master/src/sbt-test/sbt-appengine/simple
-  
+  [4]: http://code.google.com/p/googleappengine/issues/detail?id=6928
