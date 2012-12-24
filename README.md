@@ -26,7 +26,7 @@ resolvers ++= Seq(
 for `build.sbt`:
 
 ```scala
-libraryDependencies += "org.mortbay.jetty" % "jetty" % "6.1.22" % "container"
+libraryDependencies += "org.eclipse.jetty" % "jetty-webapp" % "7.6.8.v20121106" % "container"
 
 appengineSettings
 ```

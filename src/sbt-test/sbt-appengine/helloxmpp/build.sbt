@@ -3,8 +3,8 @@ import sbtappengine.Plugin.{AppengineKeys => gae}
 name := "taskqueueexamples"
 
 libraryDependencies ++= Seq(
-  "javax.servlet" % "servlet-api" % "2.3" % "provided",
-  "org.mortbay.jetty" % "jetty" % "6.1.22" % "container"
+  "javax.servlet" % "servlet-api" % "2.5" % "provided",
+  "org.eclipse.jetty" % "jetty-webapp" % "7.6.8.v20121106" % "container"
 )
 
 seq(appengineSettings: _*)
