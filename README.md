@@ -62,6 +62,21 @@ to hot reload development server continuously, set `JREBEL_PATH` and:
 
 by default development server runs in debug mode. IDE can connect to it via port 1044.
 
+
+you can deploy your backend application(s) like this:
+
+    > appengine-deploy-backends
+    
+to start a backend instance in the cloud:
+
+    > appengine-start-backend <backend-name>
+    
+to stop a backend instance:
+
+    > appengine-stop-backend <backend-name>
+
+
+
 sample
 ======
 

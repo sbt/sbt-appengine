@@ -16,6 +16,12 @@ object Plugin extends sbt.Plugin {
     lazy val requestLogs    = InputKey[Unit]("appengine-request-logs", "Write request logs in Apache common log format.")
     lazy val rollback       = InputKey[Unit]("appengine-rollback", "Rollback an in-progress update.")
     lazy val deploy         = InputKey[Unit]("appengine-deploy", "Create or update an app version.")
+    lazy val deployBackends = InputKey[Unit]("appengine-deploy-backends", "Update the specified backend or all backends.")
+    lazy val rollbackBackend = InputKey[Unit]("appengine-rollback-backends", "Roll back a previously in-progress update.")
+    lazy val configBackends = InputKey[Unit]("appengine-config-backends", "Configure the specified backend.")
+    lazy val startBackend   = InputKey[Unit]("appengine-start-backend", "Start the specified backend.")
+    lazy val stopBackend    = InputKey[Unit]("appengine-stop-backend", "Stop the specified backend.")
+    lazy val deleteBackend  = InputKey[Unit]("appengine-delete-backend", "Delete the specified backend.")
     lazy val deployIndexes  = InputKey[Unit]("appengine-deploy-indexes", "Update application indexes.")
     lazy val deployCron     = InputKey[Unit]("appengine-deploy-cron", "Update application cron jobs.")
     lazy val deployQueues   = InputKey[Unit]("appengine-deploy-queues", "Update application task queue definitions.")
@@ -52,15 +58,28 @@ object Plugin extends sbt.Plugin {
   private val gae = AppengineKeys
   
   // see https://github.com/jberkel/android-plugin/blob/master/src/main/scala/AndroidHelpers.scala
-  private def appcfgTask(action: String, outputFile: Option[String],
-                         args: TaskKey[Seq[String]],
-                         depends: TaskKey[File] = gae.emptyFile) =
-    (args, gae.temporaryWarPath, gae.appcfgPath, streams, depends) map { (args, w, appcfgPath, s, m) =>
-      val appcfg: Seq[String] = Seq(appcfgPath.absolutePath.toString) ++ args ++ Seq(action, w.absolutePath) ++ outputFile.toSeq
+  private def appcfgTask(action: String, opts: TaskKey[Seq[String]],
+                         depends: TaskKey[File] = gae.emptyFile, outputFile: Option[String] = None) =
+    (gae.appcfgPath, opts, gae.temporaryWarPath, streams, depends) map { (appcfgPath, opts, war, s, m) =>
+      appcfgTaskCmd(appcfgPath, opts, Seq(action, war.getAbsolutePath) ++ outputFile.toSeq, s)
+    }
+
+  private def appcfgBackendTask(action: String, input: TaskKey[Seq[String]],
+                                depends: TaskKey[File] = gae.emptyFile, reqParam: Boolean = false) =
+    (gae.appcfgPath, input, gae.temporaryWarPath, streams, depends) map { (appcfgPath, input, war, s, m) =>
+      val (opts, args) = input.partition(_.startsWith("--"))
+      if (reqParam && args.isEmpty)
+        sys.error("error executing appcfg: required parameter missing")
+      appcfgTaskCmd(appcfgPath, opts, Seq("backends", war.getAbsolutePath, action) ++ args, s)
+    }
+
+  private def appcfgTaskCmd(appcfgPath: sbt.File, args: Seq[String],
+                            params: Seq[String], s: TaskStreams) = {
+      val appcfg: Seq[String] = Seq(appcfgPath.absolutePath.toString) ++ args ++ params
       s.log.debug(appcfg.mkString(" "))
       val out = new StringBuffer
       val exit = appcfg!<
-      
+
       if (exit != 0) {
         s.log.error(out.toString)
         sys.error("error executing appcfg")
@@ -116,14 +135,21 @@ object Plugin extends sbt.Plugin {
     // "All of these JARs are in the SDK's lib/user/ directory."
     unmanagedClasspath in DefaultClasspathConf <++= (unmanagedClasspath) map { (cp) => cp },
         
-    gae.requestLogs <<= inputTask { (args: TaskKey[Seq[String]])   => appcfgTask("request_logs", Some("request.log"), args) },
-    gae.rollback <<= inputTask { (args: TaskKey[Seq[String]])      => appcfgTask("rollback", None, args) },
-    gae.deploy <<= inputTask { (args: TaskKey[Seq[String]])        => appcfgTask("update", None, args, packageWar) },
-    gae.deployIndexes <<= inputTask { (args: TaskKey[Seq[String]]) => appcfgTask("update_indexes", None, args, packageWar) },
-    gae.deployCron <<= inputTask { (args: TaskKey[Seq[String]])    => appcfgTask("update_cron", None, args, packageWar) },
-    gae.deployQueues <<= inputTask { (args: TaskKey[Seq[String]])  => appcfgTask("update_queues", None, args, packageWar) },
-    gae.deployDos <<= inputTask { (args: TaskKey[Seq[String]])     => appcfgTask("update_dos", None, args, packageWar) },
-    gae.cronInfo <<= inputTask { (args: TaskKey[Seq[String]])      => appcfgTask("cron_info", None, args) },
+    gae.requestLogs <<= inputTask { (input: TaskKey[Seq[String]])   => appcfgTask("request_logs", input, outputFile = Some("request.log")) },
+    gae.rollback <<= inputTask { (input: TaskKey[Seq[String]])      => appcfgTask("rollback", input) },
+    gae.deploy <<= inputTask { (input: TaskKey[Seq[String]])        => appcfgTask("update", input, packageWar) },
+    gae.deployIndexes <<= inputTask { (input: TaskKey[Seq[String]]) => appcfgTask("update_indexes", input, packageWar) },
+    gae.deployCron <<= inputTask { (input: TaskKey[Seq[String]])    => appcfgTask("update_cron", input, packageWar) },
+    gae.deployQueues <<= inputTask { (input: TaskKey[Seq[String]])  => appcfgTask("update_queues", input, packageWar) },
+    gae.deployDos <<= inputTask { (input: TaskKey[Seq[String]])     => appcfgTask("update_dos", input, packageWar) },
+    gae.cronInfo <<= inputTask { (input: TaskKey[Seq[String]])      => appcfgTask("cron_info", input) },
+
+    gae.deployBackends <<= inputTask { (input: TaskKey[Seq[String]])  => appcfgBackendTask("update", input, packageWar) },
+    gae.configBackends <<= inputTask { (input: TaskKey[Seq[String]])  => appcfgBackendTask("configure", input, packageWar) },
+    gae.rollbackBackend <<= inputTask { (input: TaskKey[Seq[String]]) => appcfgBackendTask("rollback", input, packageWar, true) },
+    gae.startBackend <<= inputTask { (input: TaskKey[Seq[String]])    => appcfgBackendTask("start", input, packageWar, true) },
+    gae.stopBackend <<= inputTask { (input: TaskKey[Seq[String]])     => appcfgBackendTask("stop", input, packageWar, true) },
+    gae.deleteBackend <<= inputTask { (input: TaskKey[Seq[String]])   => appcfgBackendTask("delete", input, packageWar, true) },
     
     gae.devServer <<= InputTask(startArgsParser) { args =>
       (streams, state, gae.reForkOptions in gae.devServer, mainClass in gae.devServer, fullClasspath in gae.devServer,
