@@ -30,6 +30,9 @@ object Plugin extends sbt.Plugin {
     lazy val devServer      = InputKey[revolver.AppProcess]("appengine-dev-server", "Run application through development server.")
     lazy val stopDevServer  = TaskKey[Unit]("appengine-stop-dev-server", "Stop development server.")
 
+    lazy val serverOnStarted = SettingKey[Seq[() => Unit]]("appengine-dev-server-onStarted")
+    lazy val serverOnStopped = SettingKey[Seq[() => Unit]]("appengine-dev-server-onStopped")
+
     lazy val apiToolsJar    = SettingKey[String]("appengine-api-tools-jar", "Name of the development startup executable jar.")
     lazy val apiToolsPath   = SettingKey[File]("appengine-api-tools-path", "Path of the development startup executable jar.")
     lazy val sdkVersion     = SettingKey[String]("appengine-sdk-version")
@@ -109,14 +112,21 @@ object Plugin extends sbt.Plugin {
   private def osBatchSuffix = if (isWindows) ".cmd" else ".sh"
 
   private def restartDevServer(streams: TaskStreams, state: State, fkops: ForkScalaRun, mainClass: Option[String], cp: Classpath,
-    args: Seq[String], startConfig: ExtraCmdLineOptions, war: File): revolver.AppProcess = {
-    stopAppWithStreams(streams, state)
-    startDevServer(streams, unregisterAppProcess(state, ()), fkops, mainClass, cp, args, startConfig)
+                               args: Seq[String], startConfig: ExtraCmdLineOptions, war: File,
+                               onStart: Seq[() => Unit], onStop: Seq[() => Unit]): revolver.AppProcess = {
+    if (state.has(appProcessKey)) {
+      colorLogger(streams.log).info("[YELLOW]Stopping dev server ...")
+      stopAppWithStreams(streams, state)
+      onStop foreach { _.apply() }
+    }
+    startDevServer(streams, unregisterAppProcess(state, ()), fkops, mainClass, cp, args, startConfig, onStart)
   }
+
   private def startDevServer(streams: TaskStreams, state: State, fkops: ForkScalaRun, mainClass: Option[String], cp: Classpath,
-      args: Seq[String], startConfig: ExtraCmdLineOptions): revolver.AppProcess = {
+                             args: Seq[String], startConfig: ExtraCmdLineOptions, onStart: Seq[() => Unit]): revolver.AppProcess = {
     assert(!state.has(appProcessKey))
-    colorLogger(streams.log).info("[YELLOW]Starting application in the background ...")
+    colorLogger(streams.log).info("[YELLOW]Starting dev server in the background ...")
+    onStart foreach { _.apply() }
     revolver.AppProcess {
       Fork.java.fork(fkops.javaHome,
         Seq("-cp", cp.map(_.data.absolutePath).mkString(System.getProperty("file.separator"))) ++
@@ -125,7 +135,7 @@ object Plugin extends sbt.Plugin {
         startConfig.startArgs ++ args,
         fkops.workingDirectory, Map(), false, StdoutOutput)
     }
-  }    
+  }
 
   lazy val baseAppengineSettings: Seq[Project.Setting[_]] = Seq(
     // this is classpath during compile
@@ -153,7 +163,7 @@ object Plugin extends sbt.Plugin {
     
     gae.devServer <<= InputTask(startArgsParser) { args =>
       (streams, state, gae.reForkOptions in gae.devServer, mainClass in gae.devServer, fullClasspath in gae.devServer,
-        gae.reStartArgs in gae.devServer, args, packageWar)
+        gae.reStartArgs in gae.devServer, args, packageWar, gae.serverOnStarted in gae.devServer, gae.serverOnStopped in gae.devServer)
         .map(restartDevServer)
         .updateState(registerAppProcess)
         .dependsOn(products in Compile) },
@@ -181,6 +191,9 @@ object Plugin extends sbt.Plugin {
       (if (d) Seq("-Xdebug", "-Xrunjdwp:transport=dt_socket,server=y,suspend=n,address=" + dp.toString) else Nil) ++
       createJRebelAgentOption(revolver.SysoutLogger, jr).toSeq },
     gae.stopDevServer <<= gae.reStop map {identity},
+
+    gae.serverOnStarted := Nil,
+    gae.serverOnStopped := Nil,
 
     gae.apiToolsJar := "appengine-tools-api.jar",
     gae.sdkVersion <<= (gae.libUserPath) { (dir) => buildSdkVersion(dir) },
