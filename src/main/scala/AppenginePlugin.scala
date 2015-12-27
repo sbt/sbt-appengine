@@ -130,20 +130,31 @@ object Plugin extends sbt.Plugin {
       startDevServer(streams, logTag, project, options, mainClass, cp, args, startConfig, onStart)
     }
     // see https://github.com/spray/sbt-revolver/blob/master/src/main/scala/spray/revolver/Actions.scala#L32
-    def startDevServer(streams: TaskStreams, logTag: String, project: ProjectRef, options: ForkOptions, mainClass: Option[String],
-        cp: Classpath, args: Seq[String], startConfig: ExtraCmdLineOptions, onStart: Seq[() => Unit]): revolver.AppProcess = {
+    def startDevServer(streams: TaskStreams, 
+                       logTag: String, project: ProjectRef, 
+                       options: ForkOptions, 
+                       mainClass: Option[String],
+                        cp: Classpath, 
+                        args: Seq[String], 
+                        startConfig: ExtraCmdLineOptions, 
+                        onStart: Seq[() => Unit]): revolver.AppProcess = {
       assert(!revolverState.getProcess(project).exists(_.isRunning))
 
       val color = updateStateAndGet(_.takeColor)
       val logger = new revolver.SysoutLogger(logTag, color, streams.log.ansiCodesSupported)
       colorLogger(streams.log).info("[YELLOW]Starting dev server in the background ...")
       onStart foreach { _.apply() }
+      val processArgs = Seq("-cp", cp.map(_.data.absolutePath).mkString(System.getProperty("file.separator"))) ++
+          options.runJVMOptions ++ 
+          startConfig.jvmArgs ++ 
+          Seq(mainClass.get) ++
+          startConfig.startArgs ++ 
+          args
+      
+      streams.log.debug(s"Forking a java process to ${options.javaHome} and arguments ${processArgs} in work dir ${options.workingDirectory}")
       val appProcess = revolver.AppProcess(project, color, logger) {
         Fork.java.fork(options.javaHome,
-          Seq("-cp", cp.map(_.data.absolutePath).mkString(System.getProperty("file.separator"))) ++
-          options.runJVMOptions ++ startConfig.jvmArgs ++ 
-          Seq(mainClass.get) ++
-          startConfig.startArgs ++ args,
+          processArgs,
           options.workingDirectory, Map(), false, StdoutOutput)
       }
       registerAppProcess(project, appProcess)
@@ -178,19 +189,25 @@ object Plugin extends sbt.Plugin {
     gae.devServer       := {
       val args = startArgsParser.parsed
       val x = (products in Compile).value
-      AppEngine.restartDevServer(streams.value, (gae.reLogTag in gae.devServer).value,
-        thisProjectRef.value, (gae.reForkOptions in gae.devServer).value,
-        (mainClass in gae.devServer).value, (fullClasspath in gae.devServer).value,
-        (gae.reStartArgs in gae.devServer).value, args,
-        packageWar.value,
-        (gae.onStartHooks in gae.devServer).value, (gae.onStopHooks in gae.devServer).value)
+      AppEngine.restartDevServer(
+        streams.value, /* Task Streams */
+        (gae.reLogTag in gae.devServer).value, /* logTag for logging */
+        thisProjectRef.value, /* Project reference */
+        (gae.reForkOptions in gae.devServer).value, /* Fork options */
+        (mainClass in gae.devServer).value, /* Main class */
+        (fullClasspath in gae.devServer).value, /* Class path */
+        (gae.reStartArgs in gae.devServer).value, /** Args passed to process - at the end of the list*/
+        args, /* Extra command line options - parsed from the command execution */
+        packageWar.value,/* War file */
+        (gae.onStartHooks in gae.devServer).value, /* on start actions */
+        (gae.onStopHooks in gae.devServer).value) /* on stop actions */
     },
     gae.reForkOptions in gae.devServer <<= (gae.temporaryWarPath, scalaInstance,
-        javaOptions in gae.devServer, outputStrategy, javaHome) map { (wp, si, jvmOptions, strategy, javaHomeDir) => ForkOptions(
+        javaOptions in gae.devServer, outputStrategy, javaHome) map { (warPath, scalaInst, jvmOptions, strategy, javaHomeDir) => ForkOptions(
         javaHome = javaHomeDir,
         outputStrategy = strategy,
-        bootJars = si.jars,
-        workingDirectory = Some(wp),
+        bootJars = scalaInst.jars,
+        workingDirectory = Some(warPath),
         runJVMOptions = jvmOptions,
         connectInput = false,
         envVars = Map.empty
@@ -206,12 +223,13 @@ object Plugin extends sbt.Plugin {
     gae.debugPort in gae.devServer := 1044,
     gae.onStartHooks in gae.devServer := Nil,
     gae.onStopHooks in gae.devServer := Nil,
-    SbtCompat.impl.changeJavaOptions { (o, a, jr, ldb, d, dp) =>
-      Seq("-ea" , "-javaagent:" + a.getAbsolutePath, "-Xbootclasspath/p:" + o.getAbsolutePath,
-        "-Ddatastore.backing_store=" + ldb.getAbsolutePath) ++
+    SbtCompat.impl.changeJavaOptions { (overridesPath, agentsJarPath, jrebelPath, localDbPath, debugFlag, debugPort) =>
+      Seq("-ea" , "-javaagent:" + agentsJarPath.getAbsolutePath, "-Xbootclasspath/p:" + overridesPath.getAbsolutePath,
+        "-Ddatastore.backing_store=" + localDbPath.getAbsolutePath) ++
       Seq("-Djava.awt.headless=true") ++
-      (if (d) Seq("-Xdebug", "-Xrunjdwp:transport=dt_socket,server=y,suspend=n,address=" + dp.toString) else Nil) ++
-      createJRebelAgentOption(revolver.SysoutLogger, jr).toSeq },
+      (if (debugFlag) Seq("-Xdebug", "-Xrunjdwp:transport=dt_socket,server=y,suspend=n,address=" + debugPort.toString) else Nil) ++
+      createJRebelAgentOption(revolver.SysoutLogger, jrebelPath).toSeq 
+    },
     gae.stopDevServer <<= gae.reStop map {identity},
 
     gae.apiToolsJar := "appengine-tools-api.jar",
