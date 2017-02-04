@@ -1,5 +1,7 @@
 package sbtappengine
 
+import java.util.Properties
+
 import sbt._
 
 object Plugin extends sbt.Plugin {
@@ -98,9 +100,12 @@ object Plugin extends sbt.Plugin {
         ()
       }
     
-    def buildAppengineSdkPath: File = {
-      val sdk = System.getenv("APPENGINE_SDK_HOME")
-      if (sdk == null) sys.error("You need to set APPENGINE_SDK_HOME")
+    def buildAppengineSdkPath(baseDir: File): File = {
+      val appengineSettings = baseDir / "appengine.properties"
+      val prop = new Properties()
+      IO.load(prop, appengineSettings)
+      val sdk = prop.getProperty("sdkHome")
+      if (sdk == null) sys.error("You need to set 'sdkHome' in 'appengine.properties'")
       new File(sdk)
     }
 
@@ -216,7 +221,7 @@ object Plugin extends sbt.Plugin {
 
     gae.apiToolsJar := "appengine-tools-api.jar",
     gae.sdkVersion <<= (gae.libUserPath) { (dir) => AppEngine.buildSdkVersion(dir) },
-    gae.sdkPath := AppEngine.buildAppengineSdkPath,
+    gae.sdkPath := AppEngine.buildAppengineSdkPath(baseDirectory.value),
 
     gae.includeLibUser := true,
     // this controls appengine classpath, which is used in unmanagedClasspath
