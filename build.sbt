@@ -12,7 +12,7 @@ licenses := Seq("MIT License" -> url("https://github.com/sbt/sbt-appengine/blob/
 
 addSbtPlugin("com.earldouglas" % "xsbt-web-plugin" % "0.4.0")
 
-addSbtPlugin("io.spray" % "sbt-revolver" % "0.7.1")
+addSbtPlugin("io.spray" % "sbt-revolver" % "0.8.0")
 
 scalacOptions := Seq("-deprecation", "-unchecked")
 

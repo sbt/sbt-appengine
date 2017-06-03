@@ -285,7 +285,7 @@ object Plugin extends sbt.Plugin {
 
   lazy val webSettings = appengineSettings
   lazy val appengineSettings: Seq[Def.Setting[_]] = WebPlugin.webSettings ++
-    inConfig(Compile)(revolver.RevolverPlugin.Revolver.settings ++ baseAppengineSettings) ++
+    inConfig(Compile)(revolver.RevolverPlugin.settings ++ baseAppengineSettings) ++
     inConfig(Test)(Seq(
       unmanagedClasspath ++= gae.classpath.value,
       gae.classpath := {
