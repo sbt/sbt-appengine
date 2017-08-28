@@ -101,11 +101,15 @@ object Plugin extends sbt.Plugin {
       }
     
     def buildAppengineSdkPath(baseDir: File): File = {
-      val appengineSettings = baseDir / "appengine.properties"
-      val prop = new Properties()
-      IO.load(prop, appengineSettings)
-      val sdk = prop.getProperty("sdkHome")
-      if (sdk == null) sys.error("You need to set 'sdkHome' in 'appengine.properties'")
+      var sdk = System.getenv("APPENGINE_SDK_HOME")
+      if (sdk == null) {
+        val appengineSettings = baseDir / "appengine.properties"
+        val prop = new Properties()
+        IO.load(prop, appengineSettings)
+        sdk = prop.getProperty("sdkHome")
+      }
+      if (sdk == null) sys.error("You need to set the 'APPENGINE_SDK_HOME' environment variable " +
+        "or the 'sdkHome' property in 'appengine.properties'")
       new File(sdk)
     }
 
