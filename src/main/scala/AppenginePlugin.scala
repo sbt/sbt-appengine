@@ -3,8 +3,15 @@ package sbtappengine
 import java.util.Properties
 
 import sbt._
+import spray.revolver.RevolverPlugin
 
-object Plugin extends sbt.Plugin {
+@deprecated("will be removed. use enablePlugins(AppenginePlugin)", "0.7.0")
+object Plugin {
+  val AppengineKeys = AppenginePlugin.autoImport.AppengineKeys
+  val appengineSettings = AppenginePlugin.projectSettings
+}
+
+object AppenginePlugin extends AutoPlugin {
   import Keys._
   import Def.Initialize
   import com.earldouglas.xsbtwebplugin.PluginKeys._
@@ -12,69 +19,80 @@ object Plugin extends sbt.Plugin {
   import spray.revolver
   import revolver.Actions._
   import revolver.Utilities._
-  
-  object AppengineKeys extends revolver.RevolverKeys {
-    lazy val requestLogs    = InputKey[Unit]("appengine-request-logs", "Write request logs in Apache common log format.")
-    lazy val rollback       = InputKey[Unit]("appengine-rollback", "Rollback an in-progress update.")
-    lazy val deploy         = InputKey[Unit]("appengine-deploy", "Create or update an app version.")
-    lazy val deployBackends = InputKey[Unit]("appengine-deploy-backends", "Update the specified backend or all backends.")
-    lazy val rollbackBackend = InputKey[Unit]("appengine-rollback-backends", "Roll back a previously in-progress update.")
-    lazy val configBackends = InputKey[Unit]("appengine-config-backends", "Configure the specified backend.")
-    lazy val startBackend   = InputKey[Unit]("appengine-start-backend", "Start the specified backend.")
-    lazy val stopBackend    = InputKey[Unit]("appengine-stop-backend", "Stop the specified backend.")
-    lazy val deleteBackend  = InputKey[Unit]("appengine-delete-backend", "Delete the specified backend.")
-    lazy val deployIndexes  = InputKey[Unit]("appengine-deploy-indexes", "Update application indexes.")
-    lazy val deployCron     = InputKey[Unit]("appengine-deploy-cron", "Update application cron jobs.")
-    lazy val deployQueues   = InputKey[Unit]("appengine-deploy-queues", "Update application task queue definitions.")
-    lazy val deployDos      = InputKey[Unit]("appengine-deploy-dos", "Update application DoS protection configuration.")
-    lazy val cronInfo       = InputKey[Unit]("appengine-cron-info", "Displays times for the next several runs of each cron job.")
-    lazy val devServer      = InputKey[revolver.AppProcess]("appengine-dev-server", "Run application through development server.")
-    lazy val stopDevServer  = TaskKey[Unit]("appengine-stop-dev-server", "Stop development server.")
-    lazy val enhance        = TaskKey[Unit]("appengine-enhance", "Execute ORM enhancement.")
-    lazy val enhanceCheck   = TaskKey[Unit]("appengine-enhance-check", "Just check the classes for enhancement status.")
 
-    lazy val onStartHooks   = SettingKey[Seq[() => Unit]]("appengine-on-start-hooks")
-    lazy val onStopHooks    = SettingKey[Seq[() => Unit]]("appengine-on-stop-hooks")
-    lazy val apiToolsJar    = SettingKey[String]("appengine-api-tools-jar", "Name of the development startup executable jar.")
-    lazy val apiToolsPath   = SettingKey[File]("appengine-api-tools-path", "Path of the development startup executable jar.")
-    lazy val sdkVersion     = SettingKey[String]("appengine-sdk-version")
-    lazy val sdkPath        = SettingKey[File]("appengine-sdk-path")
-    lazy val classpath      = SettingKey[Classpath]("appengine-classpath")
-    lazy val apiJarName     = SettingKey[String]("appengine-api-jar-name")
-    lazy val apiLabsJarName = SettingKey[String]("appengine-api-labs-jar-name")
-    lazy val jsr107CacheJarName = SettingKey[String]("appengine-jsr107-cache-jar-name")
-    lazy val binPath        = SettingKey[File]("appengine-bin-path")
-    lazy val libPath        = SettingKey[File]("appengine-lib-path")
-    lazy val libUserPath    = SettingKey[File]("appengine-lib-user-path")
-    lazy val libImplPath    = SettingKey[File]("appengine-lib-impl-path")
-    lazy val apiJarPath     = SettingKey[File]("appengine-api-jar-path")
-    lazy val appcfgName     = SettingKey[String]("appengine-appcfg-name")
-    lazy val appcfgPath     = SettingKey[File]("appengine-appcfg-path")
-    lazy val overridePath   = SettingKey[File]("appengine-override-path")
-    lazy val overridesJarPath = SettingKey[File]("appengine-overrides-jar-path")
-    lazy val agentJarPath   = SettingKey[File]("appengine-agent-jar-path")
-    lazy val emptyFile      = TaskKey[File]("appengine-empty-file")
-    lazy val temporaryWarPath = SettingKey[File]("appengine-temporary-war-path")
-    lazy val localDbPath    = SettingKey[File]("appengine-local-db-path")
-    lazy val debug          = SettingKey[Boolean]("appengine-debug")
-    lazy val debugPort      = SettingKey[Int]("appengine-debug-port")
-    lazy val includeLibUser = SettingKey[Boolean]("appengine-include-lib-user")
-    lazy val persistenceApi = SettingKey[String]("appengine-persistence-api", "Name of the API we are enhancing for: JDO, JPA.")
+  override def requires = sbt.plugins.JvmPlugin
+
+  object autoImport {
+    @deprecated("", "")
+    object AppengineKeys extends revolver.RevolverKeys
+
+    lazy val appengineRequestLogs        = InputKey[Unit]("appengine-request-logs", "Write request logs in Apache common log format.")
+    lazy val appengineRollback           = InputKey[Unit]("appengine-rollback", "Rollback an in-progress update.")
+    lazy val appengineDeploy             = InputKey[Unit]("appengine-deploy", "Create or update an app version.")
+    lazy val appengineDeployBackends     = InputKey[Unit]("appengine-deploy-backends", "Update the specified backend or all backends.")
+    lazy val appengineRollbackBackend    = InputKey[Unit]("appengine-rollback-backends", "Roll back a previously in-progress update.")
+    lazy val appengineConfigBackends     = InputKey[Unit]("appengine-config-backends", "Configure the specified backend.")
+    lazy val appengineStartBackend       = InputKey[Unit]("appengine-start-backend", "Start the specified backend.")
+    lazy val appengineStopBackend        = InputKey[Unit]("appengine-stop-backend", "Stop the specified backend.")
+    lazy val appengineDeleteBackend      = InputKey[Unit]("appengine-delete-backend", "Delete the specified backend.")
+    lazy val appengineDeployIndexes      = InputKey[Unit]("appengine-deploy-indexes", "Update application indexes.")
+    lazy val appengineDeployCron         = InputKey[Unit]("appengine-deploy-cron", "Update application cron jobs.")
+    lazy val appengineDeployQueues       = InputKey[Unit]("appengine-deploy-queues", "Update application task queue definitions.")
+    lazy val appengineDeployDos          = InputKey[Unit]("appengine-deploy-dos", "Update application DoS protection configuration.")
+    lazy val appengineCronInfo           = InputKey[Unit]("appengine-cron-info", "Displays times for the next several runs of each cron job.")
+    lazy val appengineDevServer          = InputKey[revolver.AppProcess]("appengine-dev-server", "Run application through development server.")
+    lazy val appengineStopDevServer      = TaskKey[Unit]("appengine-stop-dev-server", "Stop development server.")
+    lazy val appengineEnhance            = TaskKey[Unit]("appengine-enhance", "Execute ORM enhancement.")
+    lazy val appengineEnhanceCheck       = TaskKey[Unit]("appengine-enhance-check", "Just check the classes for enhancement status.")
+
+    lazy val appengineOnStartHooks       = SettingKey[Seq[() => Unit]]("appengine-on-start-hooks")
+    lazy val appengineOnStopHooks        = SettingKey[Seq[() => Unit]]("appengine-on-stop-hooks")
+    lazy val appengineApiToolsJar        = SettingKey[String]("appengine-api-tools-jar", "Name of the development startup executable jar.")
+    lazy val appengineApiToolsPath       = SettingKey[File]("appengine-api-tools-path", "Path of the development startup executable jar.")
+    lazy val appengineSdkVersion         = SettingKey[String]("appengine-sdk-version")
+    lazy val appengineSdkPath            = SettingKey[File]("appengine-sdk-path")
+    lazy val appengineClasspath          = SettingKey[Classpath]("appengine-classpath")
+    lazy val appengineApiJarName         = SettingKey[String]("appengine-api-jar-name")
+    lazy val appengineApiLabsJarName     = SettingKey[String]("appengine-api-labs-jar-name")
+    lazy val appengineJsr107CacheJarName = SettingKey[String]("appengine-jsr107-cache-jar-name")
+    lazy val appengineBinPath            = SettingKey[File]("appengine-bin-path")
+    lazy val appengineLibPath            = SettingKey[File]("appengine-lib-path")
+    lazy val appengineLibUserPath        = SettingKey[File]("appengine-lib-user-path")
+    lazy val appengineLibImplPath        = SettingKey[File]("appengine-lib-impl-path")
+    lazy val appengineApiJarPath         = SettingKey[File]("appengine-api-jar-path")
+    lazy val appengineAppcfgName         = SettingKey[String]("appengine-appcfg-name")
+    lazy val appengineAppcfgPath         = SettingKey[File]("appengine-appcfg-path")
+    lazy val appengineOverridePath       = SettingKey[File]("appengine-override-path")
+    lazy val appengineOverridesJarPath   = SettingKey[File]("appengine-overrides-jar-path")
+    lazy val appengineAgentJarPath       = SettingKey[File]("appengine-agent-jar-path")
+    lazy val appengineEmptyFile          = TaskKey[File]("appengine-empty-file")
+    lazy val appengineTemporaryWarPath   = SettingKey[File]("appengine-temporary-war-path")
+    lazy val appengineLocalDbPath        = SettingKey[File]("appengine-local-db-path")
+    lazy val appengineDebug              = SettingKey[Boolean]("appengine-debug")
+    lazy val appengineDebugPort          = SettingKey[Int]("appengine-debug-port")
+    lazy val appengineIncludeLibUser     = SettingKey[Boolean]("appengine-include-lib-user")
+    lazy val appenginePersistenceApi     = SettingKey[String]("appengine-persistence-api", "Name of the API we are enhancing for: JDO, JPA.")
+
+    @deprecated("will be removed. use enablePlugins(AppenginePlugin)", "0.7.0")
+    lazy val appengineSettings = AppenginePlugin.projectSettings
+
+    lazy val appengineDataNucleusSettings: Seq[Def.Setting[_]] =
+      inConfig(Compile)(baseAppengineDataNucleusSettings)
   }
-  private val gae = AppengineKeys
-  
+  import autoImport._
+
   object AppEngine {
     // see https://github.com/jberkel/android-plugin/blob/master/src/main/scala/AndroidHelpers.scala
     def appcfgTask(action: String,
-                   depends: TaskKey[File] = gae.emptyFile, outputFile: Option[String] = None): Initialize[InputTask[Unit]] =
+                   depends: TaskKey[File] = appengineEmptyFile, outputFile: Option[String] = None): Initialize[InputTask[Unit]] =
       Def.inputTask {
         import complete.DefaultParsers._
         val input: Seq[String] = spaceDelimited("<arg>").parsed
         val x = depends.value
-        appcfgTaskCmd(gae.appcfgPath.value, input, Seq(action, gae.temporaryWarPath.value.getAbsolutePath) ++ outputFile.toSeq, streams.value)
+        appcfgTaskCmd(appengineAppcfgPath.value, input, Seq(action, appengineTemporaryWarPath.value.getAbsolutePath) ++ outputFile.toSeq, streams.value)
       }
     def appcfgBackendTask(action: String,
-                          depends: TaskKey[File] = gae.emptyFile, reqParam: Boolean = false): Initialize[InputTask[Unit]] =
+                          depends: TaskKey[File] = appengineEmptyFile, reqParam: Boolean = false): Initialize[InputTask[Unit]] =
       Def.inputTask {
         import complete.DefaultParsers._
         val input: Seq[String] = spaceDelimited("<arg>").parsed
@@ -83,7 +101,7 @@ object Plugin extends sbt.Plugin {
           sys.error("error executing appcfg: required parameter missing")
         }
         val x = depends.value
-        appcfgTaskCmd(gae.appcfgPath.value, opts, Seq("backends", gae.temporaryWarPath.value.getAbsolutePath, action) ++ args, streams.value)
+        appcfgTaskCmd(appengineAppcfgPath.value, opts, Seq("backends", appengineTemporaryWarPath.value.getAbsolutePath, action) ++ args, streams.value)
       }
     def appcfgTaskCmd(appcfgPath: sbt.File, args: Seq[String],
                               params: Seq[String], s: TaskStreams) = {
@@ -150,7 +168,7 @@ object Plugin extends sbt.Plugin {
       val appProcess = revolver.AppProcess(project, color, logger) {
         Fork.java.fork(options.javaHome,
           Seq("-cp", cp.map(_.data.absolutePath).mkString(System.getProperty("file.separator"))) ++
-          options.runJVMOptions ++ startConfig.jvmArgs ++ 
+          options.runJVMOptions ++ startConfig.jvmArgs ++
           Seq(mainClass.get) ++
           startConfig.startArgs ++ args,
           options.workingDirectory, Map(), false, StdoutOutput)
@@ -162,150 +180,148 @@ object Plugin extends sbt.Plugin {
 
   lazy val baseAppengineSettings: Seq[Def.Setting[_]] = Seq(
     // this is classpath during compile
-    unmanagedClasspath <++= (gae.classpath) map { (cp) => cp },
+    unmanagedClasspath ++= appengineClasspath.value,
     // this is classpath included into WEB-INF/lib
     // https://developers.google.com/appengine/docs/java/tools/ant
     // "All of these JARs are in the SDK's lib/user/ directory."
-    unmanagedClasspath in DefaultClasspathConf <++= (unmanagedClasspath) map { (cp) => cp },
-        
-    gae.requestLogs     := AppEngine.appcfgTask("request_logs", outputFile = Some("request.log")).evaluated,
-    gae.rollback        := AppEngine.appcfgTask("rollback").evaluated,
-    gae.deploy          := AppEngine.appcfgTask("update", packageWar).evaluated,
-    gae.deployIndexes   := AppEngine.appcfgTask("update_indexes", packageWar).evaluated,
-    gae.deployCron      := AppEngine.appcfgTask("update_cron", packageWar).evaluated,
-    gae.deployQueues    := AppEngine.appcfgTask("update_queues", packageWar).evaluated,
-    gae.deployDos       := AppEngine.appcfgTask("update_dos", packageWar).evaluated,
-    gae.cronInfo        := AppEngine.appcfgTask("cron_info").evaluated,
+    unmanagedClasspath in DefaultClasspathConf ++= unmanagedClasspath.value,
 
-    gae.deployBackends  := AppEngine.appcfgBackendTask("update", packageWar).evaluated,
-    gae.configBackends  := AppEngine.appcfgBackendTask("configure", packageWar).evaluated,
-    gae.rollbackBackend := AppEngine.appcfgBackendTask("rollback", packageWar, true).evaluated,
-    gae.startBackend    := AppEngine.appcfgBackendTask("start", packageWar, true).evaluated,
-    gae.stopBackend     := AppEngine.appcfgBackendTask("stop", packageWar, true).evaluated,
-    gae.deleteBackend   := AppEngine.appcfgBackendTask("delete", packageWar, true).evaluated,
-    
-    gae.devServer       := {
+    appengineRequestLogs     := AppEngine.appcfgTask("request_logs", outputFile = Some("request.log")).evaluated,
+    appengineRollback        := AppEngine.appcfgTask("rollback").evaluated,
+    appengineDeploy          := AppEngine.appcfgTask("update", packageWar).evaluated,
+    appengineDeployIndexes   := AppEngine.appcfgTask("update_indexes", packageWar).evaluated,
+    appengineDeployCron      := AppEngine.appcfgTask("update_cron", packageWar).evaluated,
+    appengineDeployQueues    := AppEngine.appcfgTask("update_queues", packageWar).evaluated,
+    appengineDeployDos       := AppEngine.appcfgTask("update_dos", packageWar).evaluated,
+    appengineCronInfo        := AppEngine.appcfgTask("cron_info").evaluated,
+
+    appengineDeployBackends  := AppEngine.appcfgBackendTask("update", packageWar).evaluated,
+    appengineConfigBackends  := AppEngine.appcfgBackendTask("configure", packageWar).evaluated,
+    appengineRollbackBackend := AppEngine.appcfgBackendTask("rollback", packageWar, true).evaluated,
+    appengineStartBackend    := AppEngine.appcfgBackendTask("start", packageWar, true).evaluated,
+    appengineStopBackend     := AppEngine.appcfgBackendTask("stop", packageWar, true).evaluated,
+    appengineDeleteBackend   := AppEngine.appcfgBackendTask("delete", packageWar, true).evaluated,
+
+    appengineDevServer       := {
       val args = startArgsParser.parsed
       val x = (products in Compile).value
-      AppEngine.restartDevServer(streams.value, (gae.reLogTag in gae.devServer).value,
-        thisProjectRef.value, (gae.reForkOptions in gae.devServer).value,
-        (mainClass in gae.devServer).value, (fullClasspath in gae.devServer).value,
-        (gae.reStartArgs in gae.devServer).value, args,
+      AppEngine.restartDevServer(streams.value, (RevolverPlugin.autoImport.reLogTag in appengineDevServer).value,
+        thisProjectRef.value, (RevolverPlugin.autoImport.reForkOptions in appengineDevServer).value,
+        (mainClass in appengineDevServer).value, (fullClasspath in appengineDevServer).value,
+        (RevolverPlugin.autoImport.reStartArgs in appengineDevServer).value, args,
         packageWar.value,
-        (gae.onStartHooks in gae.devServer).value, (gae.onStopHooks in gae.devServer).value)
+        (appengineOnStartHooks in appengineDevServer).value, (appengineOnStopHooks in appengineDevServer).value)
     },
-    gae.reForkOptions in gae.devServer <<= (gae.temporaryWarPath, scalaInstance,
-        javaOptions in gae.devServer, outputStrategy, javaHome) map { (wp, si, jvmOptions, strategy, javaHomeDir) => ForkOptions(
-        javaHome = javaHomeDir,
-        outputStrategy = strategy,
-        bootJars = si.jars,
-        workingDirectory = Some(wp),
-        runJVMOptions = jvmOptions,
+    RevolverPlugin.autoImport.reForkOptions in appengineDevServer := {
+      ForkOptions(
+        javaHome = javaHome.value,
+        outputStrategy = outputStrategy.value,
+        bootJars = scalaInstance.value.jars,
+        workingDirectory = Some(appengineTemporaryWarPath.value),
+        runJVMOptions = (javaOptions in appengineDevServer).value,
         connectInput = false,
         envVars = Map.empty
       )
     },
-    gae.reLogTag in gae.devServer := "gae.devServer",
-    mainClass in gae.devServer := Some("com.google.appengine.tools.development.DevAppServerMain"),
-    fullClasspath in gae.devServer <<= (gae.apiToolsPath) map { (jar: File) => Seq(jar).classpath },
-    gae.localDbPath in gae.devServer := target.value / "local_db.bin",
-    gae.reStartArgs in gae.devServer <<= gae.temporaryWarPath { (wp) => Seq(wp.absolutePath) },
+    RevolverPlugin.autoImport.reLogTag in appengineDevServer := "appengineDevServer",
+    mainClass in appengineDevServer := Some("com.google.appengine.tools.development.DevAppServerMain"),
+    fullClasspath in appengineDevServer := Seq(appengineApiToolsPath.value).classpath,
+    appengineLocalDbPath in appengineDevServer := target.value / "local_db.bin",
+    RevolverPlugin.autoImport.reStartArgs in appengineDevServer := Seq(appengineTemporaryWarPath.value.absolutePath),
     // http://thoughts.inphina.com/2010/06/24/remote-debugging-google-app-engine-application-on-eclipse/
-    gae.debug in gae.devServer := true,
-    gae.debugPort in gae.devServer := 1044,
-    gae.onStartHooks in gae.devServer := Nil,
-    gae.onStopHooks in gae.devServer := Nil,
+    appengineDebug in appengineDevServer := true,
+    appengineDebugPort in appengineDevServer := 1044,
+    appengineOnStartHooks in appengineDevServer := Nil,
+    appengineOnStopHooks in appengineDevServer := Nil,
     SbtCompat.impl.changeJavaOptions { (o, a, jr, ldb, d, dp) =>
       Seq("-ea" , "-javaagent:" + a.getAbsolutePath, "-Xbootclasspath/p:" + o.getAbsolutePath,
         "-Ddatastore.backing_store=" + ldb.getAbsolutePath) ++
       Seq("-Djava.awt.headless=true") ++
       (if (d) Seq("-Xdebug", "-Xrunjdwp:transport=dt_socket,server=y,suspend=n,address=" + dp.toString) else Nil) ++
       createJRebelAgentOption(revolver.SysoutLogger, jr).toSeq },
-    gae.stopDevServer <<= gae.reStop map {identity},
+    appengineStopDevServer := RevolverPlugin.autoImport.reStop.value,
+    
+    appengineApiToolsJar := "appengine-tools-api.jar",
+    appengineSdkVersion := AppEngine.buildSdkVersion(appengineLibUserPath.value),
+    appengineSdkPath := AppEngine.buildAppengineSdkPath(baseDirectory.value),
 
-    gae.apiToolsJar := "appengine-tools-api.jar",
-    gae.sdkVersion <<= (gae.libUserPath) { (dir) => AppEngine.buildSdkVersion(dir) },
-    gae.sdkPath := AppEngine.buildAppengineSdkPath(baseDirectory.value),
-
-    gae.includeLibUser := true,
+    appengineIncludeLibUser := true,
     // this controls appengine classpath, which is used in unmanagedClasspath
-    gae.classpath <<= (gae.includeLibUser, gae.libUserPath) { (b, dir) =>
-      if (b) (dir ** "*.jar").classpath
+    appengineClasspath := {
+      if (appengineIncludeLibUser.value) (appengineLibUserPath.value ** "*.jar").classpath
       else Nil
     },
-    
-    gae.apiJarName <<= (gae.sdkVersion) { (v) => "appengine-api-1.0-sdk-" + v + ".jar" },
-    gae.apiLabsJarName <<= (gae.sdkVersion) { (v) => "appengine-api-labs-" + v + ".jar" },
-    gae.jsr107CacheJarName <<= (gae.sdkVersion) { (v) => "appengine-jsr107cache-" + v + ".jar" },
-    
-    gae.binPath <<= gae.sdkPath(_ / "bin"),
-    gae.libPath <<= gae.sdkPath(_ / "lib"),
-    gae.libUserPath <<= gae.libPath(_ / "user"),
-    gae.libImplPath <<= gae.libPath(_ / "impl"),
-    gae.apiJarPath <<= (gae.libUserPath, gae.apiJarName) { (dir, name) => dir / name },
-    gae.apiToolsPath <<= (gae.libPath, gae.apiToolsJar) { _ / _ },
-    gae.appcfgName := "appcfg" + AppEngine.osBatchSuffix,
-    gae.appcfgPath <<= (gae.binPath, gae.appcfgName) { (dir, name) => dir / name },
-    gae.overridePath <<= gae.libPath(_ / "override"),
-    gae.overridesJarPath <<= (gae.overridePath) { (dir) => dir / "appengine-dev-jdk-overrides.jar" },
-    gae.agentJarPath <<= (gae.libPath) { (dir) => dir / "agent" / "appengine-agent.jar" },
-    gae.emptyFile := file(""),
-    gae.temporaryWarPath := target.value / "webapp"
-  )
-  
-  lazy val baseAppengineDataNucleusSettings: Seq[Def.Setting[_]] = Seq(
-    packageWar <<= (packageWar) dependsOn gae.enhance,
-    gae.classpath := {
-      val appengineORMJars = (gae.libPath.value / "orm" * "*.jar").get
-      gae.classpath.value ++ appengineORMJars.classpath 
-    },
-    gae.enhance := {
-      val r: ScalaRun = (runner in Runtime).value
-      val main: String = (mainClass in gae.enhance).value.get
-      val files: Seq[File] = (exportedProducts in Runtime).value flatMap { dir =>
-        (dir.data ** "*.class").get ++ (dir.data ** "*.jdo").get
-      }
-      val args: Seq[String] = (scalacOptions in gae.enhance).value ++ (files map {_.toString}) 
-      r.run(main, (fullClasspath in gae.enhance).value map {_.data}, args, streams.value.log)
-    },
-    gae.enhanceCheck := {
-      val r: ScalaRun = (runner in Runtime).value
-      val main: String = (mainClass in gae.enhance).value.get
-      val files: Seq[File] = (exportedProducts in Runtime).value flatMap { dir =>
-        (dir.data ** "*.class").get ++ (dir.data ** "*.jdo").get
-      }
-      val args: Seq[String] = (scalacOptions in gae.enhance).value ++ Seq("-checkonly") ++ (files map {_.toString}) 
-      r.run(main, (fullClasspath in gae.enhance).value map {_.data}, args, streams.value.log)
-    },
-    mainClass in gae.enhance := Some("org.datanucleus.enhancer.DataNucleusEnhancer"),
-    fullClasspath in gae.enhance := {
-      val appengineORMEnhancerJars = (gae.libPath.value / "tools" / "orm" * "datanucleus-enhancer-*.jar").get ++
-        (gae.libPath.value / "tools" / "orm" * "asm-*.jar").get
-      (Seq(gae.apiToolsPath.value) ++ appengineORMEnhancerJars).classpath ++ (fullClasspath in Compile).value
-    },
-    // http://www.datanucleus.org/products/accessplatform_2_2/enhancer.html
-    scalacOptions in gae.enhance := ((logLevel in gae.enhance) match {
-      case Level.Debug => Seq("-v")
-      case _           => Seq()
-    } ) ++ Seq("-api", (gae.persistenceApi in gae.enhance).value),
-    logLevel in gae.enhance := Level.Debug,
-    gae.persistenceApi in gae.enhance := "JDO"
+
+    appengineApiJarName := { "appengine-api-1.0-sdk-" + appengineSdkVersion.value + ".jar" },
+    appengineApiLabsJarName := { "appengine-api-labs-" + appengineSdkVersion.value + ".jar" },
+    appengineJsr107CacheJarName := { "appengine-jsr107cache-" + appengineSdkVersion.value + ".jar" },
+
+    appengineBinPath := appengineSdkPath.value / "bin",
+    appengineLibPath := appengineSdkPath.value / "lib",
+    appengineLibUserPath := appengineLibPath.value / "user",
+    appengineLibImplPath := appengineLibPath.value / "impl",
+    appengineApiJarPath := appengineLibUserPath.value / appengineApiJarName.value,
+    appengineApiToolsPath := appengineLibPath.value / appengineApiToolsJar.value,
+    appengineAppcfgName := "appcfg" + AppEngine.osBatchSuffix,
+    appengineAppcfgPath := appengineBinPath.value / appengineAppcfgName.value,
+    appengineOverridePath := appengineLibPath.value / "override",
+    appengineOverridesJarPath := appengineOverridePath.value / "appengine-dev-jdk-overrides.jar",
+    appengineAgentJarPath := appengineLibPath.value / "agent" / "appengine-agent.jar",
+    appengineEmptyFile := file(""),
+    appengineTemporaryWarPath := target.value / "webapp"
   )
 
-  lazy val webSettings = appengineSettings
-  lazy val appengineSettings: Seq[Def.Setting[_]] = WebPlugin.webSettings ++
-    inConfig(Compile)(revolver.RevolverPlugin.Revolver.settings ++ baseAppengineSettings) ++
+  lazy val baseAppengineDataNucleusSettings: Seq[Def.Setting[_]] = Seq(
+    packageWar := packageWar.dependsOn(appengineEnhance).value,
+    appengineClasspath := {
+      val appengineORMJars = (appengineLibPath.value / "orm" * "*.jar").get
+      appengineClasspath.value ++ appengineORMJars.classpath
+    },
+    appengineEnhance := {
+      val r: ScalaRun = (runner in Runtime).value
+      val main: String = (mainClass in appengineEnhance).value.get
+      val files: Seq[File] = (exportedProducts in Runtime).value flatMap { dir =>
+        (dir.data ** "*.class").get ++ (dir.data ** "*.jdo").get
+      }
+      val args: Seq[String] = (scalacOptions in appengineEnhance).value ++ (files map {_.toString})
+      r.run(main, (fullClasspath in appengineEnhance).value map {_.data}, args, streams.value.log)
+    },
+    appengineEnhanceCheck := {
+      val r: ScalaRun = (runner in Runtime).value
+      val main: String = (mainClass in appengineEnhance).value.get
+      val files: Seq[File] = (exportedProducts in Runtime).value flatMap { dir =>
+        (dir.data ** "*.class").get ++ (dir.data ** "*.jdo").get
+      }
+      val args: Seq[String] = (scalacOptions in appengineEnhance).value ++ Seq("-checkonly") ++ (files map {_.toString})
+      r.run(main, (fullClasspath in appengineEnhance).value map {_.data}, args, streams.value.log)
+    },
+    mainClass in appengineEnhance := Some("org.datanucleus.enhancer.DataNucleusEnhancer"),
+    fullClasspath in appengineEnhance := {
+      val appengineORMEnhancerJars = (appengineLibPath.value / "tools" / "orm" * "datanucleus-enhancer-*.jar").get ++
+        (appengineLibPath.value / "tools" / "orm" * "asm-*.jar").get
+      (Seq(appengineApiToolsPath.value) ++ appengineORMEnhancerJars).classpath ++ (fullClasspath in Compile).value
+    },
+    // http://www.datanucleus.org/products/accessplatform_2_2/enhancer.html
+    scalacOptions in appengineEnhance := ((logLevel in appengineEnhance) match {
+      case Level.Debug => Seq("-v")
+      case _           => Seq()
+    } ) ++ Seq("-api", (appenginePersistenceApi in appengineEnhance).value),
+    logLevel in appengineEnhance := Level.Debug,
+    appenginePersistenceApi in appengineEnhance := "JDO"
+  )
+
+  lazy val webSettings = projectSettings
+
+  override lazy val projectSettings: Seq[Def.Setting[_]] = WebPlugin.webSettings ++
+    inConfig(Compile)(revolver.RevolverPlugin.settings ++ baseAppengineSettings) ++
     inConfig(Test)(Seq(
-      unmanagedClasspath <++= (gae.classpath) map { (cp) => cp },
-      gae.classpath <<= (gae.classpath in Compile,
-        gae.libImplPath in Compile, gae.libPath in Compile) { (cp, impl, lib) =>
-        val impljars = (impl * "*.jar").get
-        val testingjars = (lib / "testing" * "*.jar").get
-        cp ++ Attributed.blankSeq(impljars ++ testingjars)
+      unmanagedClasspath ++= appengineClasspath.value,
+      appengineClasspath := {
+        val impljars = ((appengineLibImplPath in Compile).value * "*.jar").get
+        val testingjars = ((appengineLibPath in Compile).value / "testing" * "*.jar").get
+        (appengineClasspath in Compile).value ++ Attributed.blankSeq(impljars ++ testingjars)
       }
     )) ++
     Seq(
-      watchSources <++= (webappResources in Compile) map { (wr) => (wr ** "*").get })
-
-  lazy val appengineDataNucleusSettings: Seq[Def.Setting[_]] = inConfig(Compile)(baseAppengineDataNucleusSettings)
+      watchSources ++= ((webappResources in Compile).value ** "*").get)
 }

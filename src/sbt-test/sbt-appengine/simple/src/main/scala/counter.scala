@@ -3,7 +3,7 @@ package simple
 import javax.jdo.annotations._
 import javax.jdo._
 import com.google.appengine.api.datastore.Key
-import scala.annotation.target.field
+import scala.annotation.meta.field
 
 @PersistenceCapable
 case class Counter(
@@ -13,7 +13,7 @@ case class Counter(
   @(Persistent @field)
   var count: Int)
 
-// https://developers.google.com/appengine/docs/java/datastore/jdo/creatinggettinganddeletingdata
+// https://cloud.google.com/appengine/docs/standard/java/datastore/jdo/creatinggettinganddeletingdata
 object CounterAdapter {
   def get(key: Key): Option[Counter] = {
     val pm = PMF.instance.getPersistenceManager

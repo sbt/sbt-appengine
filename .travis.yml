@@ -1,0 +1,18 @@
+sudo: false
+language: scala
+jdk: oraclejdk7
+cache:
+  directories:
+  - $HOME/gae-sdk
+before_install:
+- pushd $HOME/gae-sdk
+- SDK=appengine-java-sdk-1.9.53
+- SDK_ZIP=$SDK.zip
+- wget -N https://storage.googleapis.com/appengine-sdks/featured/$SDK_ZIP
+- unzip $SDK_ZIP
+- export APPENGINE_SDK_HOME=$HOME/gae-sdk/$SDK
+- popd
+before_cache:
+- rm -rf $HOME/gae-sdk/$SDK/
+script:
+- sbt compile scripted

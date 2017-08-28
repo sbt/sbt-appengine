@@ -14,7 +14,7 @@ setup for sbt 0.13
 put the following in the `project/appengine.sbt`:
 
 ```scala
-addSbtPlugin("com.eed3si9n" % "sbt-appengine" % "0.6.2")
+addSbtPlugin("com.eed3si9n" % "sbt-appengine" % "0.7.0")
 ```
 
 and the following in `appengine.sbt`:
@@ -22,39 +22,13 @@ and the following in `appengine.sbt`:
 ```scala
 libraryDependencies += "org.mortbay.jetty" % "jetty" % "6.1.22" % "container"
 
-appengineSettings
+enablePlugins(AppenginePlugin)
 ```
 
 setup for sbt 0.12
 ------------------
 
-put the following in the `project/plugins.sbt`:
-
-```scala
-addSbtPlugin("com.eed3si9n" % "sbt-appengine" % "0.5.0")
-
-resolvers += "spray repo" at "http://repo.spray.cc"
-```
-
-for `build.sbt`:
-
-```scala
-libraryDependencies += "org.eclipse.jetty" % "jetty-webapp" % "7.6.8.v20121106" % "container"
-
-appengineSettings
-```
-
-for `build.scala`:
-
-```scala
-import sbtappengine.Plugin._
-import AppengineKeys._
-
-lazy val example = Project("web", file("web"),
-  settings = buildSettings ++ appengineSettings ++
-             Seq( // your settings here
-             ))
-```
+see <https://github.com/sbt/sbt-appengine/tree/0.6.2#setup-for-sbt-012>
 
 usage
 -----
@@ -89,11 +63,11 @@ by default development server runs in debug mode. IDE can connect to it via port
 to run a code on start/stop of dev server:
 
 ```scala
-(gae.onStartHooks in gae.devServer in Compile) += { () =>
+(appengineOnStartHooks in appengineDevServer in Compile) += { () =>
   println("hello")
 }
 
-(gae.onStopHooks in gae.devServer in Compile) += { () =>
+(appengineOnStopHooks in appengineDevServer in Compile) += { () =>
   println("bye")
 }
 ```
@@ -117,11 +91,11 @@ to stop a backend instance:
 sbt-appengine provides experimental support for DataNucleous enhancer. to use this, include the following in `build.sbt`:
 
 ```scala
-appengineSettings
+enablePlugins(AppenginePlugin)
 
 appengineDataNucleusSettings
 
-gae.persistenceApi in gae.enhance in Compile := "JDO"
+appenginePersistenceApi in appengineEnhance in Compile := "JDO"
 ```
 
 this will call the enhancer automatically on `packageWar` task. since DataNucleous expects plain Java fields, the entity class looks a bit ugly in Scala:
@@ -129,7 +103,7 @@ this will call the enhancer automatically on `packageWar` task. since DataNucleo
 ```scala
 import javax.jdo.annotations._
 import com.google.appengine.api.datastore.Key
-import scala.annotation.target.field
+import scala.annotation.meta.field
 
 @PersistenceCapable
 case class Counter(
@@ -148,7 +122,7 @@ sample
 note
 ----
 
-When trying to launch the dev server with `appengine-dev-server`, you might run
+When trying to launch the dev server with `appengineDevServer`, you might run
 into the following exception: `java.lang.RuntimeException: Unable to restore the previous TimeZone`.
 [This issue][4] has been resolved in the latest App Engine SDK.
 
