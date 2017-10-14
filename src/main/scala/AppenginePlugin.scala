@@ -14,13 +14,14 @@ object Plugin {
 object AppenginePlugin extends AutoPlugin {
   import Keys._
   import Def.Initialize
-  import com.earldouglas.xsbtwebplugin.PluginKeys._
-  import com.earldouglas.xsbtwebplugin.WebPlugin
+  import com.earldouglas.xwp.ContainerPlugin
+  import com.earldouglas.xwp.WarPlugin
+  import com.earldouglas.xwp.WebappPlugin.autoImport.webappPrepare
   import spray.revolver
   import revolver.Actions._
   import revolver.Utilities._
 
-  override def requires = sbt.plugins.JvmPlugin
+  override def requires = sbt.plugins.JvmPlugin && WarPlugin && ContainerPlugin
 
   object autoImport {
     @deprecated("", "")
@@ -184,23 +185,23 @@ object AppenginePlugin extends AutoPlugin {
     // this is classpath included into WEB-INF/lib
     // https://developers.google.com/appengine/docs/java/tools/ant
     // "All of these JARs are in the SDK's lib/user/ directory."
-    unmanagedClasspath in DefaultClasspathConf ++= unmanagedClasspath.value,
+    unmanagedClasspath in Runtime ++= unmanagedClasspath.value,
 
     appengineRequestLogs     := AppEngine.appcfgTask("request_logs", outputFile = Some("request.log")).evaluated,
     appengineRollback        := AppEngine.appcfgTask("rollback").evaluated,
-    appengineDeploy          := AppEngine.appcfgTask("update", packageWar).evaluated,
-    appengineDeployIndexes   := AppEngine.appcfgTask("update_indexes", packageWar).evaluated,
-    appengineDeployCron      := AppEngine.appcfgTask("update_cron", packageWar).evaluated,
-    appengineDeployQueues    := AppEngine.appcfgTask("update_queues", packageWar).evaluated,
-    appengineDeployDos       := AppEngine.appcfgTask("update_dos", packageWar).evaluated,
+    appengineDeploy          := AppEngine.appcfgTask("update", `package`).evaluated,
+    appengineDeployIndexes   := AppEngine.appcfgTask("update_indexes", `package`).evaluated,
+    appengineDeployCron      := AppEngine.appcfgTask("update_cron", `package`).evaluated,
+    appengineDeployQueues    := AppEngine.appcfgTask("update_queues", `package`).evaluated,
+    appengineDeployDos       := AppEngine.appcfgTask("update_dos", `package`).evaluated,
     appengineCronInfo        := AppEngine.appcfgTask("cron_info").evaluated,
 
-    appengineDeployBackends  := AppEngine.appcfgBackendTask("update", packageWar).evaluated,
-    appengineConfigBackends  := AppEngine.appcfgBackendTask("configure", packageWar).evaluated,
-    appengineRollbackBackend := AppEngine.appcfgBackendTask("rollback", packageWar, true).evaluated,
-    appengineStartBackend    := AppEngine.appcfgBackendTask("start", packageWar, true).evaluated,
-    appengineStopBackend     := AppEngine.appcfgBackendTask("stop", packageWar, true).evaluated,
-    appengineDeleteBackend   := AppEngine.appcfgBackendTask("delete", packageWar, true).evaluated,
+    appengineDeployBackends  := AppEngine.appcfgBackendTask("update", `package`).evaluated,
+    appengineConfigBackends  := AppEngine.appcfgBackendTask("configure", `package`).evaluated,
+    appengineRollbackBackend := AppEngine.appcfgBackendTask("rollback", `package`, true).evaluated,
+    appengineStartBackend    := AppEngine.appcfgBackendTask("start", `package`, true).evaluated,
+    appengineStopBackend     := AppEngine.appcfgBackendTask("stop", `package`, true).evaluated,
+    appengineDeleteBackend   := AppEngine.appcfgBackendTask("delete", `package`, true).evaluated,
 
     appengineDevServer       := {
       val args = startArgsParser.parsed
@@ -209,7 +210,7 @@ object AppenginePlugin extends AutoPlugin {
         thisProjectRef.value, (RevolverPlugin.autoImport.reForkOptions in appengineDevServer).value,
         (mainClass in appengineDevServer).value, (fullClasspath in appengineDevServer).value,
         (RevolverPlugin.autoImport.reStartArgs in appengineDevServer).value, args,
-        packageWar.value,
+        `package`.value,
         (appengineOnStartHooks in appengineDevServer).value, (appengineOnStopHooks in appengineDevServer).value)
     },
     RevolverPlugin.autoImport.reForkOptions in appengineDevServer := {
@@ -272,7 +273,7 @@ object AppenginePlugin extends AutoPlugin {
   )
 
   lazy val baseAppengineDataNucleusSettings: Seq[Def.Setting[_]] = Seq(
-    packageWar := packageWar.dependsOn(appengineEnhance).value,
+    `package` := `package`.dependsOn(appengineEnhance).value,
     appengineClasspath := {
       val appengineORMJars = (appengineLibPath.value / "orm" * "*.jar").get
       appengineClasspath.value ++ appengineORMJars.classpath
@@ -312,7 +313,7 @@ object AppenginePlugin extends AutoPlugin {
 
   lazy val webSettings = projectSettings
 
-  override lazy val projectSettings: Seq[Def.Setting[_]] = WebPlugin.webSettings ++
+  override lazy val projectSettings: Seq[Def.Setting[_]] =
     inConfig(Compile)(revolver.RevolverPlugin.settings ++ baseAppengineSettings) ++
     inConfig(Test)(Seq(
       unmanagedClasspath ++= appengineClasspath.value,
@@ -323,5 +324,5 @@ object AppenginePlugin extends AutoPlugin {
       }
     )) ++
     Seq(
-      watchSources ++= ((webappResources in Compile).value ** "*").get)
+      watchSources ++= ((sourceDirectory in webappPrepare in Compile).value ** "*").get)
 }
