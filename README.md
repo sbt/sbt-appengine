@@ -1,5 +1,7 @@
 sbt-appengine is a sbt 0.10+ port of the awesome [Yasushi/sbt-appengine-plugin][1].
 
+# https://github.com/sbt/sbt-appengine/issues/59
+
 requirements
 ------------
 
